@@ -1,9 +1,9 @@
 const express = require('express');
 const cors = require('cors');
+const mongoose = require('mongoose');
 
 const app = express();
 
-// Configuración de CORS usando la variable de entorno
 app.use(cors({
     origin: process.env.FRONTEND_URL || '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
@@ -12,44 +12,54 @@ app.use(cors({
 
 app.use(express.json());
 
-// Base de datos temporal en memoria (para pruebas)
-let productos = [
-    { id: 1, nombre: "Producto Ejemplo 1", precio: 100.00, stock: 10 },
-    { id: 2, nombre: "Producto Ejemplo 2", precio: 250.50, stock: 5 }
-];
+// Conexión a la base de datos física
+const MONGO_URI = process.env.MONGO_URI;
 
-// Endpoint GET: Obtener todos los productos
-app.get('/api/productos', (req, res) => {
+mongoose.connect(MONGO_URI)
+    .then(() => console.log('Conectado exitosamente a MongoDB Atlas'))
+    .catch(err => console.error('Error al conectar a la base de datos:', err));
+
+// Definir un Esquema y un Modelo para los productos
+const productoSchema = new mongoose.Schema({
+    nombre: { type: String, required: true },
+    precio: { type: Number, required: true },
+    stock: { type: Number, required: true }
+});
+
+const Producto = mongoose.model('Producto', productoSchema);
+
+// Endpoint GET: Obtener productos desde la base de datos real
+app.api = {}; // solo sintaxis de soporte
+app.get('/api/productos', async (req, res) => {
     try {
+        const productos = await Producto.find();
         res.json(productos);
     } catch (error) {
-        res.status(500).json({ status: "Error", mensaje: "Error interno del servidor" });
+        res.status(500).json({ status: "Error", mensaje: "Error al obtener los productos" });
     }
 });
 
-// Endpoint POST: Agregar un nuevo producto
-app.post('/api/productos', (req, res) => {
+// Endpoint POST: Guardar producto en la base de datos real
+app.post('/api/productos', async (req, res) => {
     try {
         const { nombre, precio, stock } = req.body;
         if (!nombre || !precio || stock === undefined) {
             return res.status(400).json({ status: "Error", mensaje: "Faltan datos requeridos" });
         }
 
-        const nuevoProducto = {
-            id: productos.length + 1,
+        const nuevoProducto = new Producto({
             nombre,
             precio: parseFloat(precio),
             stock: parseInt(stock)
-        };
+        });
 
-        productos.push(nuevoProducto);
+        await nuevoProducto.save();
         res.status(201).json(nuevoProducto);
     } catch (error) {
         res.status(500).json({ status: "Error", mensaje: "Error al guardar el producto" });
     }
 });
 
-// Puerto dinámico que exige Render
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Servidor escuchando en el puerto ${PORT}`);
